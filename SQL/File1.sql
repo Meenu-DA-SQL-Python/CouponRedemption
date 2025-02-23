@@ -184,4 +184,4 @@ SELECT "customer_demographics" AS table_name, COUNT(*) AS row_count FROM custome
 SELECT "customer_transactions" AS table_name, COUNT(*) AS row_count FROM customer_transactions Union
 SELECT "item_data" AS table_name, COUNT(*) AS row_count FROM item_data Union
 SELECT "temp_campaign_data" AS table_name, COUNT(*) AS row_count FROM temp_campaign_data Union
-SELECT "train" AS table_name, COUNT(*) AS row_count FROM train 
+SELECT "train" AS table_name, COUNT(*) AS row_count FROM train    
