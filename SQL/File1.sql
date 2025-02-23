@@ -164,4 +164,24 @@ LINES TERMINATED BY '\n'
 IGNORE 1 LINES;
 
 
-select Count(*) from train
+select concat( 'select count(*) as [Total Rows] from ', select TABLE_NAME
+from INFORMATION_SCHEMA.TABLEs
+where table_schema='credemption'
+and table_type='BASE TABLE') ;
+
+
+SELECT CONCAT(
+  'SELECT "', TABLE_NAME, '" AS table_name, COUNT(*) AS row_count FROM ', TABLE_NAME , ' Union'
+) AS query
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = 'credemption'
+  AND TABLE_TYPE = 'BASE TABLE';
+
+
+SELECT "campaign_data" AS table_name, COUNT(*) AS row_count FROM campaign_data Union
+SELECT "coupon_item_mapping" AS table_name, COUNT(*) AS row_count FROM coupon_item_mapping Union
+SELECT "customer_demographics" AS table_name, COUNT(*) AS row_count FROM customer_demographics Union
+SELECT "customer_transactions" AS table_name, COUNT(*) AS row_count FROM customer_transactions Union
+SELECT "item_data" AS table_name, COUNT(*) AS row_count FROM item_data Union
+SELECT "temp_campaign_data" AS table_name, COUNT(*) AS row_count FROM temp_campaign_data Union
+SELECT "train" AS table_name, COUNT(*) AS row_count FROM train 
