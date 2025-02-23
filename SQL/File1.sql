@@ -1,6 +1,7 @@
---To Show the directory to load the data from csv file to table
 
+--To Show the directory to load the data from csv file to table
 SHOW VARIABLES LIKE 'secure_file_priv';
+
 --Creting a temp table as the date format doesn't match the DB requirement 
 Creating a temp table as the date are in different format(DD-MM-YYYY) in csv and the server accepts only (YYYY-MM-DD) 
 
@@ -17,7 +18,8 @@ INTO TABLE temp_campaign_data
 FIELDS TERMINATED BY ',' 
 LINES TERMINATED BY '\n'
 IGNORE 1 LINES;
---Create table Original table
+
+--Create table Original table for campaign_data
 CREATE TABLE campaign_data (
     campaign_id INT PRIMARY KEY,
     campaign_type CHAR(1),  -- 'Y' or 'X' as per your example
@@ -34,6 +36,7 @@ SELECT
     STR_TO_DATE(end_date, '%d-%m-%Y'),
     campaigning_days
 FROM temp_campaign_data;
+
 --Check the Count
 select count(*) from campaign_data;
 select count(*) from customer_demographics;
@@ -52,7 +55,9 @@ LINES TERMINATED BY '\n'
 IGNORE 1 LINES;
 
 select count(*) from customer_demographics;--Row count passed
+
 ---Truncate coupon_item_mapping
+
 TRUNCATE coupon_item_mapping;
 
 ALTER TABLE coupon_item_mapping
@@ -64,8 +69,6 @@ INTO TABLE coupon_item_mapping
 FIELDS TERMINATED BY ',' 
 LINES TERMINATED BY '\n'
 IGNORE 1 LINES;
-
-
 
 
 -----Create Customer transaction
@@ -125,17 +128,6 @@ select count(*) from item_data;
 --Create train
 ALTER TABLE coupon_item_mapping
 ADD PRIMARY KEY (coupon_id);
-
-WITH cte AS (
-  SELECT
-    coupon_id,
-    ROW_NUMBER() OVER (PARTITION BY coupon_id ORDER BY item_id) AS row_num
-  FROM coupon_item_mapping
-)
-DELETE FROM coupon_item_mapping
-WHERE coupon_id IN (
-  SELECT coupon_id FROM cte WHERE row_num > 1
-);
 
 
 ALTER TABLE coupon_item_mapping
