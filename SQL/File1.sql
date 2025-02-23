@@ -169,7 +169,7 @@ from INFORMATION_SCHEMA.TABLEs
 where table_schema='credemption'
 and table_type='BASE TABLE') ;
 
-
+--- Check the count of all the tables added
 SELECT CONCAT(
   'SELECT "', TABLE_NAME, '" AS table_name, COUNT(*) AS row_count FROM ', TABLE_NAME , ' Union'
 ) AS query
