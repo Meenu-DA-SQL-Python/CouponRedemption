@@ -1,14 +1,12 @@
---1.Find the number of coupons redeemed per campaign.
---Solution: Use GROUP BY with COUNT and GROUP_CONCAT on campaign_id and redemption_status.
+--1 Coupons Redember by Customer or not 
 select COUNT(distinct campaign_id) from campaign_data;
-select distinct redemption_status from train;
+select distinct redemption_status from train;--1-Redemed,0-Not Redemed
 
-with Coupon_not_Red as
+with Coupon_not_Red as (
 select distinct  
-cd.campaign_id
+cd.campaign_id campaign_id
 from campaign_data cd
-where cd.campaign_id not in (select distinct campaign_id from train);
-
+where cd.campaign_id not in (select distinct campaign_id from train))
 select 
 cd.campaign_id
 ,count(distinct train.customer_id)
@@ -22,15 +20,14 @@ cd.campaign_id
 ,count(distinct train.customer_id)
 ,'No' as 'Customer Redemded?'
 from campaign_data cd
-inner join train train on cd.campaign_id=train.campaign_id 
-where cd.campaign_id not in (select distinct campaign_id from train)
-group by campaign_id;
+inner join coupon_not_Red cnr on cd.campaign_id=cnr.campaign_id 
+left join train train on cd.campaign_id=train.campaign_id 
+group by campaign_id
+order by campaign_id;
 
-
-
-
-
-
+--1.Find the number of coupons redeemed per campaign.
+--Solution: Use GROUP BY with COUNT and GROUP_CONCAT on campaign_id and redemption_status.
+select count(distinct customer_id ) from customer_demographics;
 
 
 2.	List customers who have never redeemed a coupon.
