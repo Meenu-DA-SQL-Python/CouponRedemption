@@ -168,6 +168,21 @@ select concat( 'select count(*) as [Total Rows] from ', select TABLE_NAME
 from INFORMATION_SCHEMA.TABLEs
 where table_schema='credemption'
 and table_type='BASE TABLE') ;
+-----------Create Test table----------
+CREATE TABLE test (
+    id INT PRIMARY KEY,                -- Unique ID for coupon customer impression
+    campaign_id INT,                   -- Unique ID for a discount campaign
+    coupon_id INT,                     -- Unique ID for a discount coupon
+    customer_id INT                    -- Unique ID for a customer
+);
+
+LOAD DATA  INFILE '/usr/local/mysql-files/test.csv'
+INTO TABLE test
+FIELDS TERMINATED BY ','
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES;
+
+
 
 --- Check the count of all the tables added
 SELECT CONCAT(
@@ -184,4 +199,5 @@ SELECT "customer_demographics" AS table_name, COUNT(*) AS row_count FROM custome
 SELECT "customer_transactions" AS table_name, COUNT(*) AS row_count FROM customer_transactions Union
 SELECT "item_data" AS table_name, COUNT(*) AS row_count FROM item_data Union
 SELECT "temp_campaign_data" AS table_name, COUNT(*) AS row_count FROM temp_campaign_data Union
-SELECT "train" AS table_name, COUNT(*) AS row_count FROM train    
+SELECT "train" AS table_name, COUNT(*) AS row_count FROM train   union
+SELECT "test" AS table_name, COUNT(*) AS row_count FROM test  

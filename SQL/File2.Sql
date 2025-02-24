@@ -1,5 +1,38 @@
-----1.	Find the number of coupons redeemed per campaign.
-o	Solution: Use GROUP BY with COUNT and GROUP_CONCAT on campaign_id and redemption_status.
+--1.Find the number of coupons redeemed per campaign.
+--Solution: Use GROUP BY with COUNT and GROUP_CONCAT on campaign_id and redemption_status.
+select COUNT(distinct campaign_id) from campaign_data;
+select distinct redemption_status from train;
+
+with Coupon_not_Red as
+select distinct  
+cd.campaign_id
+from campaign_data cd
+where cd.campaign_id not in (select distinct campaign_id from train);
+
+select 
+cd.campaign_id
+,count(distinct train.customer_id)
+,'Yes' as 'Customer Redemded?'
+from campaign_data cd
+inner join train train on cd.campaign_id=train.campaign_id 
+group by campaign_id
+union 
+select 
+cd.campaign_id
+,count(distinct train.customer_id)
+,'No' as 'Customer Redemded?'
+from campaign_data cd
+inner join train train on cd.campaign_id=train.campaign_id 
+where cd.campaign_id not in (select distinct campaign_id from train)
+group by campaign_id;
+
+
+
+
+
+
+
+
 2.	List customers who have never redeemed a coupon.
 o	Solution: Use LEFT JOIN between train.csv and customer_id, then filter out redemption_status = 1.
 3.	Get the average number of family members per customer.
