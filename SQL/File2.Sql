@@ -1,4 +1,4 @@
---1 Coupons Redember by Customer or not 
+--1 Coupons Redember by Customer or not for any Campaign id
 select COUNT(distinct campaign_id) from campaign_data;
 select distinct redemption_status from train;--1-Redemed,0-Not Redemed
 
@@ -25,13 +25,49 @@ left join train train on cd.campaign_id=train.campaign_id
 group by campaign_id
 order by campaign_id;
 
---1.Find the number of coupons redeemed per campaign.
+--1.Find the number of coupons redeemed per campaign and the percentage of Coupon Redeemed 
 --Solution: Use GROUP BY with COUNT and GROUP_CONCAT on campaign_id and redemption_status.
-select count(distinct customer_id ) from customer_demographics;
+
+SELECT 
+   campaign_id 
+  ,COUNT(DISTINCT coupon_id) AS distinct_coupon_count
+  ,COUNT(coupon_id)   CouponDistributed
+  ,COUNT(CASE WHEN redemption_status=1 THEN 1 END) Redeemed
+  ,COUNT(CASE WHEN redemption_status=0 THEN 1 END) NotRRedeemed
+  ,(COUNT(CASE WHEN redemption_status=1 THEN 1 END)/COUNT(coupon_id)) *100 '% of Coupon Redeemed'
+ FROM train
+GROUP BY campaign_id;
 
 
-2.	List customers who have never redeemed a coupon.
-o	Solution: Use LEFT JOIN between train.csv and customer_id, then filter out redemption_status = 1.
+--2.	List customers who have never redeemed a coupon.
+--o	Solution: Use LEFT JOIN between train.csv and customer_id, then filter out redemption_status = 1.
+
+select * from 
+(select
+ CD.customer_id
+,CASE 
+            WHEN COUNT(DISTINCT tr.campaign_id) = 0 THEN 'NeverParticipated' 
+            ELSE 'Participated' 
+        END AS ParticipationStatus
+,count(DISTINCT tr.campaign_id) as campaignParticipated        
+,group_concat(distinct campaign_id)
+,count(coupon_id)  CouponProvided
+,COUNT(CASE WHEN redemption_status=1 THEN coupon_id END) Redeemed
+,COUNT(CASE WHEN redemption_status=0 THEN coupon_id END) NotRedeemed
+,(COUNT(CASE WHEN redemption_status=1 THEN coupon_id END)/COUNT(coupon_id)) *100 Per_of_Coupon_Redeemed
+from  customer_demographics CD
+left join train tr on tr.customer_id=CD.customer_id
+group by CD.customer_id )  Subquery
+order by Subquery.campaignParticipated asc , Per_of_Coupon_Redeemed desc;
+
+
+select distinct customer_id
+from train t where not exists 
+(select 1 from customer_demographics cd where cd.customer_id=t.customer_id);
+
+
+
+
 3.	Get the average number of family members per customer.
 o	Solution: Use AVG on family_size from customer_demographics.csv.
 4.	Retrieve the total sales value of items bought using a coupon.
