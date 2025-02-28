@@ -292,13 +292,83 @@ ORDER BY
 --- at campaing 13 coupon id 21 is used frequently
 
 
-Complex SQL Questions Using Window Functions (20)
-1.	Rank customers based on the number of coupons redeemed per campaign.
-o	Solution: Use ROW_NUMBER() or RANK() with PARTITION BY campaign_id ORDER BY COUNT(coupon_id).
-2.	Calculate the cumulative discount for each customer across all campaigns.
-o	Solution: Use SUM(coupon_discount) OVER (PARTITION BY customer_id ORDER BY campaign_id).
-3.	Identify the top 5 customers by total spending on items with coupons.
-o	Solution: Use SUM(selling_price) OVER (PARTITION BY customer_id) and ORDER BY to limit to top 5.
+--Complex SQL Questions Using Window Functions (20)
+--1.	Rank customers based on the number of coupons redeemed per campaign.
+--o	Solution: Use ROW_NUMBER() or RANK() with PARTITION BY campaign_id ORDER BY COUNT(coupon_id).
+
+with ranksupport as (
+    select 
+    campaign_id,
+    count(distinct customer_id),
+    rank() over (order by count(distinct customer_id ) DESC) rankCampaign
+    from train 
+    where redemption_status=1
+    group by 
+    campaign_id
+    order by campaign_id)
+select * from ranksupport order by rankCampaign;
+
+--2.	Calculate the cumulative discount for each customer across all campaigns.
+--o	Solution: Use SUM(coupon_discount) OVER (PARTITION BY customer_id ORDER BY campaign_id).
+SELECT distinct
+    camp.campaign_id,
+    tr.coupon_id,
+    sum(case when  ct.transaction_date between camp.start_date and camp.end_date then coupon_discount end) coupon_used_ontime,
+    sum(case when  ct.transaction_date not between camp.start_date and camp.end_date then coupon_discount end) coupon_used_nottime,
+    count(case when  ct.transaction_date between camp.start_date and camp.end_date then cd.customer_id end) countcoupon_used_ontime,
+    count(case when  ct.transaction_date not between camp.start_date and camp.end_date then cd.customer_id end) countcoupon_used_nottime
+FROM train TR
+INNER JOIN customer_demographics cd ON tr.customer_id = cd.customer_id
+INNER JOIN customer_transactions ct ON ct.customer_id = tr.customer_id and coupon_discount <>0
+inner join coupon_item_mapping cim on  cim.item_id=ct.item_id and tr.coupon_id=cim.coupon_id 
+    and ct.item_id =cim.item_id
+inner join campaign_data camp on tr.campaign_id=camp.campaign_id 
+GROUP BY 
+    camp.campaign_id,
+    tr.coupon_id
+ORDER BY 
+    camp.campaign_id desc; 
+
+SELECT distinct
+    camp.campaign_id,
+    tr.coupon_id,
+    count(ct.customer_id) over (PARTITION by tr.coupon_id) NO_OF_COUPON_USED,
+    sum(ct.coupon_discount) over (PARTITION by tr.coupon_id) COUPONVALUE
+FROM train TR
+INNER JOIN customer_demographics cd ON tr.customer_id = cd.customer_id
+INNER JOIN customer_transactions ct ON ct.customer_id = tr.customer_id and coupon_discount <>0
+inner join coupon_item_mapping cim on  cim.item_id=ct.item_id and tr.coupon_id=cim.coupon_id 
+    and ct.item_id =cim.item_id
+inner join campaign_data camp on tr.campaign_id=camp.campaign_id 
+    and ct.transaction_date between camp.start_date and camp.end_date 
+ORDER BY 
+    camp.campaign_id desc; 
+
+--3.	Identify the top 5 customers by total spending on items with coupons.
+--o	Solution: Use SUM(selling_price) OVER (PARTITION BY customer_id) and ORDER BY to limit to top 5.
+
+with ranksupport as(
+SELECT distinct
+    camp.campaign_id,
+    tr.coupon_id,
+    tr.customer_id,
+    ct.item_id,
+    sum(ct.selling_price) over (PARTITION by  camp.campaign_id,tr.coupon_id,tr.customer_id) SELLINGVALUE,
+    sum(ct.coupon_discount) over (PARTITION by camp.campaign_id,tr.coupon_id,tr.customer_id) COUPONVALUE
+FROM train TR
+INNER JOIN customer_demographics cd ON tr.customer_id = cd.customer_id
+INNER JOIN customer_transactions ct ON ct.customer_id = tr.customer_id and coupon_discount <>0
+inner join coupon_item_mapping cim on  cim.item_id=ct.item_id and tr.coupon_id=cim.coupon_id 
+    and ct.item_id =cim.item_id
+inner join campaign_data camp on tr.campaign_id=camp.campaign_id 
+    and ct.transaction_date between camp.start_date and camp.end_date 
+ORDER BY 
+    camp.campaign_id , 
+    tr.coupon_id,
+    tr.customer_id desc)
+select *,rank() over (order by SELLINGVALUE desc) from ranksupport; 
+
+
 4.	Calculate the moving average of coupon redemption rate for each campaign over time.
 o	Solution: Use AVG(redemption_status) OVER (PARTITION BY campaign_id ORDER BY start_date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW).
 5.	Rank products based on the quantity sold per coupon redemption.
@@ -333,4 +403,5 @@ o	Solution: Use SUM(coupon_discount) OVER (PARTITION BY item_id ORDER BY campaig
 o	Solution: Use COUNT(coupon_id) OVER (PARTITION BY customer_id ORDER BY campaign_id ROWS BETWEEN 4 PRECEDING AND CURRENT ROW).
 20.	Find the top 5 most redeemed coupons for each campaign.
 o	Solution: Use RANK() with PARTITION BY campaign_id ORDER BY COUNT(coupon_id) and limit to top 5.
+
 
