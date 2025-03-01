@@ -346,7 +346,6 @@ ORDER BY
 
 --3.	Identify the top 5 customers by total spending on items with coupons.
 --o	Solution: Use SUM(selling_price) OVER (PARTITION BY customer_id) and ORDER BY to limit to top 5.
-
 with ranksupport as(
 SELECT distinct
     camp.campaign_id,
@@ -357,7 +356,7 @@ SELECT distinct
     sum(ct.coupon_discount) over (PARTITION by camp.campaign_id,tr.coupon_id,tr.customer_id) COUPONVALUE
 FROM train TR
 INNER JOIN customer_demographics cd ON tr.customer_id = cd.customer_id
-INNER JOIN customer_transactions ct ON ct.customer_id = tr.customer_id and coupon_discount <>0
+INNER JOIN customer_transactions ct ON ct.customer_id = tr.customer_id and coupon_discount <>0 and tr.redemption_status=1
 inner join coupon_item_mapping cim on  cim.item_id=ct.item_id and tr.coupon_id=cim.coupon_id 
     and ct.item_id =cim.item_id
 inner join campaign_data camp on tr.campaign_id=camp.campaign_id 
@@ -365,14 +364,66 @@ inner join campaign_data camp on tr.campaign_id=camp.campaign_id
 ORDER BY 
     camp.campaign_id , 
     tr.coupon_id,
-    tr.customer_id desc)
-select *,rank() over (order by SELLINGVALUE desc) from ranksupport; 
+    tr.customer_id desc),
+rankcalc as 
+(select *, RANK() OVER (ORDER BY SELLINGVALUE DESC) AS rank_sellingPrice
+    FROM ranksupport )    
+select *
+from rankcalc
+where rank_sellingPrice <10; 
 
 
-4.	Calculate the moving average of coupon redemption rate for each campaign over time.
-o	Solution: Use AVG(redemption_status) OVER (PARTITION BY campaign_id ORDER BY start_date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW).
-5.	Rank products based on the quantity sold per coupon redemption.
-o	Solution: Use RANK() with PARTITION BY coupon_id ORDER BY SUM(quantity).
+--4.	Calculate the moving average of coupon redemption rate for each campaign over time.
+--o	Solution: Use AVG(redemption_status) OVER (PARTITION BY campaign_id ORDER BY start_date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW).
+
+
+select 
+tr.campaign_id
+,tr.customer_id
+,camp.start_date
+,camp.end_date
+,avg(redemption_status) over (partition by tr.campaign_id ORDER by tr.customer_id,ct.transaction_date asc rows between 4 PRECEDING and current row)
+FROM train TR
+INNER JOIN customer_demographics cd ON tr.customer_id = cd.customer_id
+INNER JOIN customer_transactions ct ON ct.customer_id = tr.customer_id and coupon_discount <>0 
+inner join coupon_item_mapping cim on  cim.item_id=ct.item_id and tr.coupon_id=cim.coupon_id 
+    and ct.item_id =cim.item_id
+inner join campaign_data camp on tr.campaign_id=camp.campaign_id 
+    and ct.transaction_date between camp.start_date and camp.end_date ;
+
+
+show PROCESSLIST;
+kill 40
+
+
+
+
+
+--5.	Rank products based on the quantity sold per coupon redemption.
+--o	Solution: Use RANK() with PARTITION BY coupon_id ORDER BY SUM(quantity).
+with 
+customer_redeemed as
+(select campaign_id,coupon_id,customer_id from train where redemption_status=1 group by campaign_id,coupon_id,customer_id),
+redeemed_transaction as
+(select  customer_id,item_id,sum(quantity) quantity from customer_transactions where coupon_discount<>0 group by customer_id,item_id)
+select distinct
+    customer_redeemed.campaign_id
+    ,id.CATEGORY
+    ,count(distinct customer_redeemed.customer_id) redeemed_count
+    ,sum(rt.quantity) as quan
+    ,rank() over (partition by customer_redeemed.campaign_id order by count(distinct customer_redeemed.customer_id) desc)
+    ,rank() over (partition by customer_redeemed.campaign_id order by sum(rt.quantity) desc)
+from item_data id  
+inner join redeemed_transaction rt  on rt.item_id=id.item_id
+inner join customer_redeemed on customer_redeemed.customer_id=rt.customer_id 
+group by 
+ customer_redeemed.campaign_id
+,id.CATEGORY
+order by     customer_redeemed.campaign_id, redeemed_count desc;
+
+
+show PROCESSLIST
+
 6.	Find the first purchase date for each customer who redeemed a coupon.
 o	Solution: Use MIN(date) OVER (PARTITION BY customer_id ORDER BY date).
 7.	Calculate the average sales value per customer across campaigns.
