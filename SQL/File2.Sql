@@ -411,8 +411,8 @@ select distinct
     ,id.CATEGORY
     ,count(distinct customer_redeemed.customer_id) redeemed_count
     ,sum(rt.quantity) as quan
-    ,rank() over (partition by customer_redeemed.campaign_id order by count(distinct customer_redeemed.customer_id) desc)
-    ,rank() over (partition by customer_redeemed.campaign_id order by sum(rt.quantity) desc)
+    ,rank() over (partition by customer_redeemed.campaign_id order by count(distinct customer_redeemed.customer_id) desc) Customer_Rank
+    ,rank() over (partition by customer_redeemed.campaign_id order by sum(rt.quantity) desc) quantity_rank
 from item_data id  
 inner join redeemed_transaction rt  on rt.item_id=id.item_id
 inner join customer_redeemed on customer_redeemed.customer_id=rt.customer_id 
@@ -424,18 +424,200 @@ order by     customer_redeemed.campaign_id, redeemed_count desc;
 
 show PROCESSLIST
 
-6.	Find the first purchase date for each customer who redeemed a coupon.
-o	Solution: Use MIN(date) OVER (PARTITION BY customer_id ORDER BY date).
-7.	Calculate the average sales value per customer across campaigns.
-o	Solution: Use AVG(selling_price) OVER (PARTITION BY customer_id).
-8.	Identify the percentage change in sales for each product before and after a campaign.
-o	Solution: Use LAG() to get previous sales and calculate the difference and percentage change.
-9.	Find the rank of each coupon based on total discount value in a campaign.
-o	Solution: Use RANK() with PARTITION BY campaign_id ORDER BY SUM(coupon_discount).
-10.	Determine how many campaigns a customer participated in, with a limit to those who redeemed coupons.
-o	Solution: Use COUNT(DISTINCT campaign_id) OVER (PARTITION BY customer_id) with WHERE redemption_status = 1.
-11.	List the customers with the highest cumulative discount, ordered by campaign.
-o	Solution: Use SUM(coupon_discount) OVER (PARTITION BY customer_id ORDER BY campaign_id).
+--6.	Percentage of correct an incorrect customer
+--o	Solution: Use MIN(date) OVER (PARTITION BY customer_id ORDER BY date).
+
+SELECT 
+    campaign_id,
+    customer_id,
+    coupon_id,
+    transaction_status,
+    COUNT(*) AS transaction_count,
+    CAST(COUNT(*) AS DECIMAL) 
+        / CAST(SUM(COUNT(*)) OVER (PARTITION BY campaign_id, customer_id, coupon_id) AS DECIMAL) 
+        AS transaction_percentage
+FROM 
+    (SELECT 
+        tr.campaign_id,
+        tr.customer_id,
+        tr.coupon_id,
+        count(tr.coupon_id) over (partition by tr.campaign_id,tr.customer_id,tr.coupon_id) No_ofTimesCoupon_Used,
+        CASE
+            WHEN ct.transaction_date
+                BETWEEN camp.start_date AND camp.end_date THEN 'Correct transaction'
+            ELSE 'Incorrect transaction'
+        END AS transaction_status
+    FROM 
+        train tr
+    INNER JOIN 
+        customer_demographics cd ON tr.customer_id = cd.customer_id
+    INNER JOIN 
+        customer_transactions ct ON ct.customer_id = tr.customer_id AND ct.coupon_discount <> 0
+    INNER JOIN 
+        coupon_item_mapping cim ON cim.item_id = ct.item_id AND tr.coupon_id = cim.coupon_id 
+    INNER JOIN 
+        campaign_data camp ON tr.campaign_id = camp.campaign_id
+    WHERE 
+        tr.redemption_status = 1) AS subquery
+GROUP BY 
+    campaign_id,
+    customer_id,
+    coupon_id,
+    transaction_status
+ORDER BY 
+    campaign_id, 
+    transaction_percentage DESC;
+
+
+--7.	Calculate the average sales value per customer across campaigns.Average Money Spend and Average Money saved.
+--o	Solution: Use AVG(selling_price) OVER (PARTITION BY customer_id).
+
+select 
+tr.Customer_id ,
+avg(selling_price) AVG_Selling_Price,
+avg(case when ct.transaction_date between camp.start_date and camp.end_date then coupon_discount end) Average_coupon_discount,
+avg(case when ct.transaction_date between camp.start_date and camp.end_date then other_discount end) Average_other_discount,
+avg(selling_price)+(avg(case when ct.transaction_date between camp.start_date and camp.end_date then coupon_discount end)+
+avg(case when ct.transaction_date between camp.start_date and camp.end_date then other_discount end) ) Average_Spend,
+avg(selling_price) -(avg(selling_price)+(avg(case when ct.transaction_date between camp.start_date and camp.end_date then coupon_discount end)+
+avg(case when ct.transaction_date between camp.start_date and camp.end_date then other_discount end) ) ) Average_Saving
+FROM 
+        train tr
+    INNER JOIN 
+        customer_demographics cd ON tr.customer_id = cd.customer_id
+    INNER JOIN 
+        customer_transactions ct ON ct.customer_id = tr.customer_id AND ct.coupon_discount <> 0
+    INNER JOIN 
+        coupon_item_mapping cim ON cim.item_id = ct.item_id AND tr.coupon_id = cim.coupon_id 
+    INNER JOIN 
+        campaign_data camp ON tr.campaign_id = camp.campaign_id
+    WHERE 
+        tr.redemption_status = 1
+group by 
+customer_id
+Order by customer_id;
+
+
+show PROCESSLIST
+kill 14
+
+--8.	Identify the percentage change in sales for each product before and after a campaign.
+--o	Solution: Use LAG() to get previous sales and calculate the difference and percentage change.
+
+WITH filtered_transactions AS (
+    SELECT 
+        ct.customer_id,
+        ct.item_id,
+        ct.transaction_date,
+        ct.selling_price
+    FROM customer_transactions ct
+    WHERE ct.coupon_discount <> 0
+),
+campaign_sales AS (
+    SELECT 
+        id.category,
+        ft.transaction_date,
+        ft.selling_price,
+        camp.start_date,
+        camp.end_date,
+        CASE 
+            WHEN ft.transaction_date < camp.start_date THEN 'AVG_SELL_PRICE_BEFORE_CAMP'
+            WHEN ft.transaction_date BETWEEN camp.start_date AND camp.end_date THEN 'AVG_SELL_PRICE_DURING_CAMP'
+            WHEN ft.transaction_date > camp.end_date THEN 'AVG_SELL_PRICE_AFTER_CAMP'
+        END AS Selling_Price_Timing_Label,
+        CASE 
+            WHEN ft.transaction_date < camp.start_date THEN 1
+            WHEN ft.transaction_date BETWEEN camp.start_date AND camp.end_date THEN 2
+            WHEN ft.transaction_date > camp.end_date THEN 3
+        END AS Selling_Price_Timing
+    FROM train tr
+    INNER JOIN customer_demographics cd ON tr.customer_id = cd.customer_id
+    INNER JOIN filtered_transactions ft ON ft.customer_id = tr.customer_id
+    INNER JOIN coupon_item_mapping cim ON cim.item_id = ft.item_id AND tr.coupon_id = cim.coupon_id 
+    INNER JOIN item_data id ON id.item_id = ft.item_id    
+    INNER JOIN campaign_data camp ON tr.campaign_id = camp.campaign_id
+    WHERE tr.redemption_status = 1
+),
+aggregated_sales AS (
+    SELECT 
+        category,
+        Selling_Price_Timing_Label,
+        Selling_Price_Timing,
+        AVG(selling_price) AS Avg_Selling_Price
+    FROM campaign_sales
+    GROUP BY category, Selling_Price_Timing_Label, Selling_Price_Timing
+)
+SELECT 
+    category,
+    Selling_Price_Timing_Label,
+    Selling_Price_Timing,
+    Avg_Selling_Price,
+    LEAD(Avg_Selling_Price) OVER (
+        PARTITION BY category ORDER BY Selling_Price_Timing ASC
+    ) AS Next_Avg_Selling_Price,
+     CASE 
+        WHEN Avg_Selling_Price = 0 THEN NULL 
+        ELSE 
+            ROUND(
+                (LEAD(Avg_Selling_Price) OVER (
+                    PARTITION BY category ORDER BY Selling_Price_Timing ASC
+                ) - Avg_Selling_Price) / Avg_Selling_Price * 100, 2
+            )
+    END AS Percentage_Change
+FROM aggregated_sales
+ORDER BY category, Selling_Price_Timing;
+
+--9.	Find the rank of each coupon based on total discount value in a campaign.
+--o	Solution: Use RANK() with PARTITION BY campaign_id ORDER BY SUM(coupon_discount).
+
+WITH coupon_summary AS (
+    SELECT 
+        camp.campaign_id,
+        tr.coupon_id,
+        SUM(ct.coupon_discount) AS total_coupon_discount
+    FROM train tr
+    INNER JOIN customer_demographics cd ON tr.customer_id = cd.customer_id
+    INNER JOIN customer_transactions ct ON ct.customer_id = tr.customer_id
+    INNER JOIN item_data id ON id.item_id = ct.item_id    
+    INNER JOIN coupon_item_mapping cim ON cim.item_id = id.item_id 
+        AND tr.coupon_id = cim.coupon_id 
+    INNER JOIN campaign_data camp ON tr.campaign_id = camp.campaign_id
+    WHERE tr.redemption_status = 1 and ct.coupon_discount<>0
+    GROUP BY camp.campaign_id, tr.coupon_id
+)
+SELECT 
+    campaign_id,
+    coupon_id,
+    total_coupon_discount,
+    RANK() OVER (
+        PARTITION BY campaign_id 
+        ORDER BY total_coupon_discount DESC
+    ) AS rank_per_campaign_coupon
+FROM coupon_summary;
+
+
+
+show PROCESSLIST
+kill 43
+
+
+--10.	Determine how many campaigns a customer participated in, with a limit to those who redeemed coupons.
+--o	Solution: Use COUNT(DISTINCT campaign_id) OVER (PARTITION BY customer_id) with WHERE redemption_status = 1.
+
+
+select 
+tr.customer_id
+,count( distinct tr.campaign_id)
+,rank() over(order by count( distinct tr.campaign_id) desc)
+FROM train tr
+where tr.redemption_status=1
+group by 
+customer_id
+
+
+
+--11.	List the customers with the highest cumulative discount, ordered by campaign.
+--o	Solution: Use SUM(coupon_discount) OVER (PARTITION BY customer_id ORDER BY campaign_id).
 12.	Find the median sales value of items purchased by customers who redeemed coupons.
 o	Solution: Use PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY selling_price).
 13.	Identify customers who have redeemed coupons in consecutive campaigns.
