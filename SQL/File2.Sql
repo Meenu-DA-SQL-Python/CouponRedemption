@@ -677,7 +677,6 @@ group by camp.campaign_id,
     datediff(end_date, start_date)
 Order by camp.campaign_id;
 
-
 --8.	Identify the percentage change in sales for each product before and after a campaign.
 --o	Solution: Use LAG() to get previous sales and calculate the difference and percentage change.
 WITH filtered_transactions AS (
