@@ -1,74 +1,56 @@
---1 Coupons Redember by Customer or not for any Campaign id
-select
-    COUNT(distinct campaign_id)
-from
-    campaign_data;
-select distinct
-    redemption_status
-from
-    train;
---1-Redemed,0-Not Redemed
-with
-    Coupon_not_Red as (
-        select distinct
-            cd.campaign_id campaign_id
-        from
-            campaign_data cd
-        where
-            cd.campaign_id not in (
-                select distinct
-                    campaign_id
-                from
-                    train
-            )
-    )
-select
-    cd.campaign_id,
-    count(distinct train.customer_id),
+--No of  Coupons Redember by Customer or not for any Campaign id
+select COUNT(distinct campaign_id) Count_of_Campaign
+from campaign_data;
+select distinct redemption_status
+from train;
+--  1-Redemed, 0-Not Redemed
+with Coupon_not_Red as (
+    select distinct cd.campaign_id campaign_id
+    from campaign_data cd
+    where cd.campaign_id not in (
+            select distinct campaign_id
+            from train
+        )
+)
+select cd.campaign_id,
+    count(distinct train.customer_id) Count_distinct_Customerid,
     'Yes' as 'Customer Redemded?'
-from
-    campaign_data cd
+from campaign_data cd
     inner join train train on cd.campaign_id = train.campaign_id
-group by
-    campaign_id
+group by campaign_id
 union
-select
-    cd.campaign_id,
-    count(distinct train.customer_id),
+select cd.campaign_id,
+    count(distinct train.customer_id) Count_distinct_Customerid,
     'No' as 'Customer Redemded?'
-from
-    campaign_data cd
+from campaign_data cd
     inner join coupon_not_Red cnr on cd.campaign_id = cnr.campaign_id
     left join train train on cd.campaign_id = train.campaign_id
-group by
-    campaign_id
-order by
-    campaign_id;
+group by campaign_id
+order by campaign_id;
 --1.Find the number of coupons redeemed per campaign and the percentage of Coupon Redeemed 
 --Solution: Use GROUP BY with COUNT and GROUP_CONCAT on campaign_id and redemption_status.
-SELECT campaign_id COUNT(DISTINCT coupon_id) AS distinct_coupon_count,
-COUNT(coupon_id) CouponDistributed,
-COUNT(
-    CASE
-        WHEN redemption_status = 1 THEN 1
-    END
-) Redeemed,
-COUNT(
-    CASE
-        WHEN redemption_status = 0 THEN 1
-    END
-) NotRRedeemed,
-(
+SELECT campaign_id,
+    COUNT(DISTINCT coupon_id) AS distinct_coupon_count,
+    COUNT(coupon_id) CouponDistributed,
     COUNT(
         CASE
             WHEN redemption_status = 1 THEN 1
         END
-    ) / COUNT(coupon_id)
-) * 100 '% of Coupon Redeemed'
-FROM
-    train
-GROUP BY
-    campaign_id;
+    ) Redeemed,
+    COUNT(
+        CASE
+            WHEN redemption_status = 0 THEN 1
+        END
+    ) NotRRedeemed,
+    (
+        COUNT(
+            CASE
+                WHEN redemption_status = 1 THEN 1
+            END
+        ) / COUNT(coupon_id)
+    ) * 100 '% of Coupon Redeemed'
+FROM train
+GROUP BY campaign_id;
 --2.	List customers who have never redeemed a coupon.
 --o	Solution: Use LEFT JOIN between train.csv and customer_id, then filter out redemption_status = 1.
 select *
@@ -95,12 +77,11 @@ from (
                 CASE
                     WHEN redemption_status = 1 THEN coupon_id
                 END
-            ) / COUNT(coupon_id)
-    ) * 100 Per_of_Coupon_Redeemed
-from customer_demographics CD
-    left join train tr on tr.customer_id = CD.customer_id
-group by CD.customer_id
-) Subquery
+            ) / COUNT(tr.coupon_id) * 100 Per_of_Coupon_Redeemed
+        from customer_demographics CD
+            left join train tr on tr.customer_id = CD.customer_id
+        group by CD.customer_id
+    ) Subquery
 order by Subquery.campaignParticipated asc,
     Per_of_Coupon_Redeemed desc;
 -- found not all customer in train has information in customer demographics. So adding random data to the customer demographics
@@ -113,6 +94,8 @@ where not exists (
     );
 select distinct no_of_children
 from customer_demographics as cd;
+
+
 update customer_demographics
 set no_of_children = '3'
 where no_of_children = '3+';
@@ -127,7 +110,7 @@ LOAD DATA INFILE '/usr/local/mysql-files/synthetic_customer_data_extended.csv' I
 --o	Solution: Use AVG on family_size from customer_demographics.csv.
 select
     marital_status,
-    count(customer_id)
+    count(customer_id) Count_of_customer
 from
     customer_demographics
 group by
@@ -142,7 +125,7 @@ where
 commit;
 
 select
-    no_of_children length (no_of_children),
+    no_of_children ,length (no_of_children),
     count(customer_id),
 from
     customer_demographics
@@ -189,7 +172,7 @@ select
     family_size,
     marital_status,
     no_of_children,
-    count(customer_id)
+    count(customer_id) Count_of_customer
 from
     customer_demographics,
 group by
@@ -217,6 +200,8 @@ where not exists (
         from customer_transactions
         where item_data.item_id = customer_transactions.item_id
     );
+
+
 select item_id
 from customer_transactions
 where not exists (
@@ -224,6 +209,8 @@ where not exists (
         from item_data
         where item_data.item_id = customer_transactions.item_id
     );
+
+
 with Ranksupport as(
     SELECT id.item_id,
         id.brand,
@@ -332,7 +319,7 @@ group by
 --o	Solution: Join customer_demographics.csv with train.csv, then calculate the AVG(income_bracket) for customers where redemption_status = 1.
 select
     cd.marital_status,
-    round(avg(income_bracket))
+    round(avg(income_bracket)) income_bracket
 from
     train tr
     inner join customer_demographics cd on cd.customer_id = tr.customer_id
@@ -344,7 +331,7 @@ group by
 SELECT distinct
     camp.campaign_id,
     tr.coupon_id,
-    count(tr.coupon_id)
+    count(tr.coupon_id) Count_of_Coupon
 FROM
     train TR
     INNER JOIN customer_demographics cd ON tr.customer_id = cd.customer_id
@@ -390,7 +377,7 @@ SELECT distinct camp.campaign_id,
         case
             when ct.transaction_date not between camp.start_date and camp.end_date then coupon_discount
         end
-    ) coupon_used_nottime,
+    ) coupon_used_notontime,
     count(
         case
             when ct.transaction_date between camp.start_date and camp.end_date then cd.customer_id
@@ -400,7 +387,7 @@ SELECT distinct camp.campaign_id,
         case
             when ct.transaction_date not between camp.start_date and camp.end_date then cd.customer_id
         end
-    ) countcoupon_used_nottime
+    ) countcoupon_used_notontime
 FROM train TR
     INNER JOIN customer_demographics cd ON tr.customer_id = cd.customer_id
     INNER JOIN customer_transactions ct ON ct.customer_id = tr.customer_id
@@ -416,9 +403,9 @@ ORDER BY camp.campaign_id desc;
 
 
 SELECT distinct camp.campaign_id,
-    tr.coupon_id,
-    count(ct.customer_id) over (PARTITION by tr.coupon_id) NO_OF_COUPON_USED,
-    sum(ct.coupon_discount) over (PARTITION by tr.coupon_id) COUPONVALUE
+tr.coupon_id,
+count(ct.customer_id) over (PARTITION by tr.coupon_id) NO_OF_COUPON_USED,
+sum(ct.coupon_discount) over (PARTITION by tr.coupon_id) COUPONVALUE
 FROM train TR
     INNER JOIN customer_demographics cd ON tr.customer_id = cd.customer_id
     INNER JOIN customer_transactions ct ON ct.customer_id = tr.customer_id
